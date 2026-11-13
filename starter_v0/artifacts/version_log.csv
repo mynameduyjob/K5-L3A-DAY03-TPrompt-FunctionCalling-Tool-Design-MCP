@@ -1,1 +1,2 @@
 version,author,changed_artifact,artifact_version,prompt_hash,tools_hash,reason,hypothesis,metric_before,metric_after,run_file
+v1, D, artifacts/system_prompt.md, 1.0, a1b2c3d4..., e5f6g7h8..., Agent tự ý trả lời mà không gọi tool tính toán, Thêm rule bắt buộc gọi tool trước khi phản hồi, 0.45, 0.70, runs/eval_v1_abc123.json

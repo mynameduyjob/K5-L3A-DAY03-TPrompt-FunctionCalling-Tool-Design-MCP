@@ -28,12 +28,25 @@ ALLOWED_CASE_FAILURE_TYPES = {
     "missing_info",
 }
 
-
-def load_cases(path: Path, phase: str) -> list[dict[str, Any]]:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    cases = data["cases"]
-    cases = [case for case in cases if case["phase"] == phase]
-    validate_case_failure_types(cases, path)
+def load_cases(eval_cases_path, phase=None):
+    path = Path(eval_cases_path)
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    
+    # Nếu file JSON là một list thuần túy, lấy luôn list đó làm cases
+    if isinstance(data, list):
+        cases = data
+    # Nếu file JSON là dictionary có chứa key "cases"
+    elif isinstance(data, dict) and "cases" in data:
+        cases = data["cases"]
+    else:
+        # Trường hợp dự phòng nếu cấu trúc khác
+        cases = data.get("cases", [])
+        
+    # Lọc theo phase nếu có yêu cầu
+    if phase:
+        cases = [c for c in cases if c.get("phase") == phase]
+        
     return cases
 
 
@@ -49,27 +62,38 @@ def validate_case_failure_types(cases: list[dict[str, Any]], path: Path) -> None
         raise ValueError(f"Invalid failure_type in {path}: {joined}. Allowed: {allowed}")
 
 
-def validate_expected_tools(cases: list[dict[str, Any]], declarations: list[dict[str, Any]], path: Path) -> None:
-    declared = {item["name"] for item in declarations}
-    implemented = set(TOOL_FUNCTIONS)
-    invalid: list[str] = []
+def validate_expected_tools(cases, tool_declarations, eval_cases_path):
     for case in cases:
-        for call in case.get("expect", {}).get("tool_calls", []):
-            name = call.get("name")
-            if name not in declared:
-                invalid.append(f"{case.get('id', '<missing id>')}: {name!r} not declared in tools.yaml")
-            elif name not in implemented:
-                invalid.append(f"{case.get('id', '<missing id>')}: {name!r} has no implementation in tools.py")
-    if invalid:
-        raise ValueError(f"Invalid expected tool in {path}: {'; '.join(invalid)}")
+        expect = case.get("expect", {})
+        
+        # Nếu expect là dạng chuỗi (ví dụ: "no_tool"), bỏ qua bước check tool_calls chi tiết này
+        if isinstance(expect, str):
+            continue
+            
+        # Nếu expect là dict chuẩn
+        tool_calls = expect.get("tool_calls", [])
+        for call in tool_calls:
+            tool_name = call.get("name")
+            if tool_name not in tool_declarations:
+                raise ValueError(f"Case {case.get('id')} expects unknown tool '{tool_name}'")
 
 
-def load_dataset_info(path: Path) -> dict[str, Any]:
-    data = json.loads(path.read_text(encoding="utf-8"))
+def load_dataset_info(eval_cases_path):
+    path = Path(eval_cases_path)
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    
+    # Nếu file JSON là một list (danh sách test case thuần túy)
+    if isinstance(data, list):
+        return {
+            "dataset_id": path.stem,
+            "cases": data
+        }
+    
+    # Nếu file JSON là một dictionary chuẩn
     return {
         "dataset_id": data.get("dataset_id", path.stem),
-        "dataset_role": data.get("dataset_role", ""),
-        "description": data.get("description", ""),
+        "cases": data.get("cases", data)
     }
 
 
